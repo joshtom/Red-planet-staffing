@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Red Planet Staffing — Mars Simulation</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;700&display=swap');
+
+  :root {
+    --red: #c0392b;
+    --red-bright: #e74c3c;
+    --red-glow: #ff4500;
+    --orange: #e67e22;
+    --gold: #f39c12;
+    --dust: #7f1d1d;
+    --bg: #050a0f;
+    --panel: rgba(10,15,20,0.92);
+    --border: rgba(192,57,43,0.35);
+    --text: #e8d5c4;
+    --muted: #8a6a5a;
+    --mono: 'Share Tech Mono', monospace;
+    --sans: 'Exo 2', sans-serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  #canvas-container {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+  }
+
+  canvas { display: block; }
+
+  /* ── TOP BAR ── */
+  #topbar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 20px;
+    background: linear-gradient(180deg, rgba(5,10,15,0.97) 0%, rgba(5,10,15,0) 100%);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .logo {
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: 0.15em;
+    color: var(--red-glow);
+    text-shadow: 0 0 20px var(--red-glow);
+    white-space: nowrap;
+  }
+
+  .logo span { color: var(--text); opacity: 0.5; }
+
+  #clock {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    margin-left: auto;
+  }
+
+  #clock strong { color: var(--orange); }
+
+  .btn {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    background: rgba(192,57,43,0.12);
+    color: var(--text);
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+
+  .btn:hover {
+    background: rgba(192,57,43,0.3);
+    border-color: var(--red-bright);
+    color: #fff;
+    box-shadow: 0 0 12px rgba(231,76,60,0.4);
+  }
+
+  .btn.active {
+    background: rgba(192,57,43,0.4);
+    border-color: var(--red-glow);
+    color: var(--red-glow);
+    box-shadow: 0 0 16px rgba(255,69,0,0.5);
+  }
+
+  .btn-primary {
+    background: rgba(192,57,43,0.3);
+    border-color: var(--red-bright);
+    color: var(--red-glow);
+  }
+
+  .btn-primary:hover {
+    background: rgba(231,76,60,0.5);
+    box-shadow: 0 0 20px rgba(255,69,0,0.6);
+  }
+
+  .sep { width: 1px; height: 24px; background: var(--border); }
+
+  /* ── RIGHT SIDEBAR ── */
+  #sidebar {
+    position: fixed;
+    top: 60px; right: 0; bottom: 120px;
+    width: 220px;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    overflow: hidden;
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    backdrop-filter: blur(8px);
+  }
+
+  .panel-header {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    color: var(--red-bright);
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    text-transform: uppercase;
+  }
+
+  .leaderboard-list { padding: 8px 0; }
+
+  .lb-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    font-size: 11px;
+    transition: background 0.2s;
+  }
+
+  .lb-item:hover { background: rgba(192,57,43,0.1); }
+
+  .lb-rank {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    width: 14px;
+    flex-shrink: 0;
+  }
+
+  .lb-rank.gold { color: var(--gold); }
+  .lb-rank.silver { color: #aaa; }
+  .lb-rank.bronze { color: #cd7f32; }
+
+  .lb-name { flex: 1; font-size: 11px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lb-count { font-family: var(--mono); font-size: 10px; color: var(--orange); flex-shrink: 0; }
+
+  .lb-bar {
+    height: 2px;
+    margin: 0 12px 4px;
+    background: rgba(255,255,255,0.05);
+    position: relative;
+  }
+
+  .lb-bar-fill {
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    background: linear-gradient(90deg, var(--dust), var(--red-glow));
+    transition: width 0.6s ease;
+  }
+
+  /* ── STATS PANEL ── */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border-top: 1px solid var(--border);
+  }
+
+  .stat-cell {
+    background: rgba(5,10,15,0.9);
+    padding: 10px 12px;
+    text-align: center;
+  }
+
+  .stat-value {
+    font-family: var(--mono);
+    font-size: 20px;
+    color: var(--red-glow);
+    text-shadow: 0 0 12px rgba(255,69,0,0.6);
+    display: block;
+  }
+
+  .stat-label {
+    font-size: 9px;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  /* ── BOTTOM FEED ── */
+  #feed {
+    position: fixed;
+    bottom: 0; left: 0; right: 240px;
+    height: 110px;
+    z-index: 10;
+    background: linear-gradient(0deg, rgba(5,10,15,0.97) 0%, rgba(5,10,15,0) 100%);
+    border-top: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+  }
+
+  #feed-header {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    color: var(--red-bright);
+    padding: 6px 16px 4px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+
+  #feed-log {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0 16px 8px;
+    display: flex;
+    flex-direction: column-reverse;
+    gap: 2px;
+  }
+
+  #feed-log::-webkit-scrollbar { width: 2px; }
+  #feed-log::-webkit-scrollbar-track { background: transparent; }
+  #feed-log::-webkit-scrollbar-thumb { background: var(--dust); }
+
+  .feed-entry {
+    font-family: var(--mono);
+    font-size: 10px;
+    display: flex;
+    gap: 10px;
+    animation: feedIn 0.3s ease;
+  }
+
+  @keyframes feedIn {
+    from { opacity: 0; transform: translateY(4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .feed-time { color: var(--muted); flex-shrink: 0; }
+  .feed-msg { color: var(--text); }
+  .feed-msg .highlight { color: var(--orange); }
+  .feed-msg .workplace { color: var(--red-bright); }
+
+  /* ── WORKER TOOLTIP ── */
+  #tooltip {
+    position: fixed;
+    z-index: 20;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    font-size: 11px;
+    backdrop-filter: blur(8px);
+    min-width: 160px;
+  }
+
+  #tooltip.visible { opacity: 1; }
+  #tooltip .tip-name { font-weight: 600; color: var(--red-glow); margin-bottom: 4px; }
+  #tooltip .tip-stat { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+
+  /* ── MODE INDICATOR ── */
+  #mode-badge {
+    font-family: var(--mono);
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 3px 8px;
+  }
+
+  /* ── SCANLINES ── */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.03) 2px,
+      rgba(0,0,0,0.03) 4px
+    );
+    pointer-events: none;
+    z-index: 100;
+  }
+
+  /* ── SHIFT TICKER ── */
+  #shift-counter {
+    position: fixed;
+    top: 60px; left: 12px;
+    z-index: 10;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+  }
+
+  #shift-counter strong { color: var(--red-glow); font-size: 28px; display: block; line-height: 1; }
+
+  /* ── WORKPLACE POPUP ── */
+  #wp-popup {
+    position: fixed;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 30;
+    background: var(--panel);
+    border: 1px solid var(--red-bright);
+    padding: 20px 24px;
+    min-width: 260px;
+    backdrop-filter: blur(12px);
+    display: none;
+    box-shadow: 0 0 40px rgba(231,76,60,0.3);
+  }
+
+  #wp-popup.visible { display: block; animation: popIn 0.2s ease; }
+
+  @keyframes popIn {
+    from { opacity: 0; transform: translate(-50%, -48%) scale(0.96); }
+    to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  }
+
+  #wp-popup h2 { font-size: 15px; color: var(--red-glow); margin-bottom: 12px; font-weight: 600; }
+  #wp-popup .wp-stat { display: flex; justify-content: space-between; font-size: 11px; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
+  #wp-popup .wp-stat span:first-child { color: var(--muted); }
+  #wp-popup .wp-stat span:last-child { font-family: var(--mono); color: var(--text); }
+  #wp-popup .close-btn { margin-top: 14px; width: 100%; }
+
+  .pulse-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--red-glow);
+    display: inline-block;
+    margin-right: 6px;
+    animation: pulse 1.5s ease infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(255,69,0,0.6); }
+    50% { opacity: 0.6; box-shadow: 0 0 0 4px rgba(255,69,0,0); }
+  }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div class="logo">◈ RED<span>/</span>PLANET <span>STAFFING</span></div>
+  <div class="sep"></div>
+  <button class="btn btn-primary" id="btn-next">▶ NEXT SHIFT</button>
+  <button class="btn" id="btn-auto">⟳ AUTO RUN</button>
+  <div class="sep"></div>
+  <button class="btn" id="btn-terrain">TERRAIN</button>
+  <button class="btn" id="btn-globe">GLOBE</button>
+  <div class="sep"></div>
+  <div id="mode-badge">TERRAIN MODE</div>
+  <div id="clock">MARS SOL <strong id="sol-num">001</strong></div>
+</div>
+
+<!-- SHIFT COUNTER -->
+<div id="shift-counter">
+  SHIFT<strong id="shift-num">0</strong>
+</div>
+
+<!-- CANVAS -->
+<div id="canvas-container"><canvas id="c"></canvas></div>
+
+<!-- SIDEBAR -->
+<div id="sidebar">
+  <div class="panel">
+    <div class="panel-header"><span class="pulse-dot"></span>LIVE STATS</div>
+    <div class="stats-grid">
+      <div class="stat-cell"><span class="stat-value" id="stat-workers">15</span><span class="stat-label">Workers</span></div>
+      <div class="stat-cell"><span class="stat-value" id="stat-wp">8</span><span class="stat-label">Sites</span></div>
+      <div class="stat-cell"><span class="stat-value" id="stat-done">0</span><span class="stat-label">Completed</span></div>
+      <div class="stat-cell"><span class="stat-value" id="stat-open">20</span><span class="stat-label">Open</span></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">TOP SITES</div>
+    <div class="leaderboard-list" id="lb-workplaces"></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">TOP WORKERS</div>
+    <div class="leaderboard-list" id="lb-workers"></div>
+  </div>
+</div>
+
+<!-- BOTTOM FEED -->
+<div id="feed">
+  <div id="feed-header">▸ ACTIVITY LOG</div>
+  <div id="feed-log"></div>
+</div>
+
+<!-- TOOLTIP -->
+<div id="tooltip">
+  <div class="tip-name" id="tip-name"></div>
+  <div class="tip-stat" id="tip-stat"></div>
+</div>
+
+<!-- WORKPLACE POPUP -->
+<div id="wp-popup">
+  <h2 id="wp-name"></h2>
+  <div class="wp-stat"><span>Completed Shifts</span><span id="wp-done"></span></div>
+  <div class="wp-stat"><span>Active Workers</span><span id="wp-active"></span></div>
+  <div class="wp-stat"><span>Open Shifts</span><span id="wp-open"></span></div>
+  <button class="btn close-btn" onclick="closePopup()">✕ CLOSE</button>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// DATA — self-contained seeded dataset (mirrors Prisma seed)
+// ═══════════════════════════════════════════════════════════════
+
+const WORKER_NAMES = [
+  "Zara Voss","Kai Oduya","Mira Solano","Dex Harlow","Lena Frost",
+  "Rhys Nakamura","Petra Malik","Juno Adeyemi","Orion Steele","Cass Ferrara",
+  "Blake Thorn","Nova Reyes","Soren Blix","Aiko Strand","Cy Mercer"
+];
+
+const WORKPLACE_NAMES = [
+  "Olympus Mining Rig","Valles Marineris Depot","Hellas Basin Refinery",
+  "Tharsis Dome HQ","Elysium Drilling Plt.","Arcadia Outpost",
+  "Amazonis Lab","Syrtis Major Fab"
+];
+
+function seedRand(seed) {
+  let s = seed;
+  return () => { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff; };
+}
+const rng = seedRand(42);
+
+const workers = WORKER_NAMES.map((name, i) => ({
+  id: i+1, name,
+  status: ["idle","working","travelling","idle","working"][i%5],
+  completedShifts: 0
+}));
+
+const workplaces = WORKPLACE_NAMES.map((name, i) => ({
+  id: i+1, name,
+  completedShifts: 0,
+  activeWorkers: 0,
+  openShifts: 0
+}));
+
+// Generate 100 shifts
+const now = Date.now();
+const shifts = [];
+for (let i = 0; i < 100; i++) {
+  const r = rng();
+  const wp = workplaces[Math.floor(rng() * workplaces.length)];
+  const start = now - rng() * 30 * 86400000;
+  let workerId = null, cancelledAt = null, completed = false;
+  if (r < 0.6) { workerId = workers[Math.floor(rng() * workers.length)].id; completed = true; }
+  else if (r < 0.8) { /* open */ }
+  else { cancelledAt = new Date(start + 3600000).toISOString(); }
+  shifts.push({ id: i+1, workerId, workplaceId: wp.id, cancelledAt, startAt: new Date(start).toISOString(), endAt: new Date(start+28800000).toISOString(), completed });
+}
+// 20 future open shifts
+for (let i = 0; i < 20; i++) {
+  const wp = workplaces[Math.floor(rng() * workplaces.length)];
+  const start = now + (i * 43200000);
+  shifts.push({ id: 100+i+1, workerId: null, workplaceId: wp.id, cancelledAt: null, startAt: new Date(start).toISOString(), endAt: new Date(start+28800000).toISOString(), completed: false });
+}
+
+// Compute initial stats
+shifts.forEach(s => {
+  if (s.completed) {
+    const wp = workplaces.find(w => w.id === s.workplaceId);
+    if (wp) wp.completedShifts++;
+    if (s.workerId) { const wk = workers.find(w => w.id === s.workerId); if (wk) wk.completedShifts++; }
+  }
+});
+
+let currentShift = 0;
+let sol = 1;
+let autoRun = false;
+let autoInterval = null;
+let mode = 'terrain'; // terrain | globe
+
+// ═══════════════════════════════════════════════════════════════
+// THREE.JS SCENE
+// ═══════════════════════════════════════════════════════════════
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0x020810, 1);
+renderer.shadowMap.enabled = true;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x1a0500, 0.008);
+
+const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 2000);
+camera.position.set(0, 45, 90);
+camera.lookAt(0, 0, 0);
+
+// Lighting
+const ambientLight = new THREE.AmbientLight(0x331100, 0.8);
+scene.add(ambientLight);
+const sunLight = new THREE.DirectionalLight(0xff7733, 1.4);
+sunLight.position.set(30, 60, 20);
+sunLight.castShadow = true;
+scene.add(sunLight);
+const rimLight = new THREE.DirectionalLight(0x220044, 0.3);
+rimLight.position.set(-30, 20, -40);
+scene.add(rimLight);
+
+// Starfield
+const starGeo = new THREE.BufferGeometry();
+const starCount = 3000;
+const starPos = new Float32Array(starCount * 3);
+for (let i = 0; i < starCount*3; i++) starPos[i] = (Math.random()-0.5)*2000;
+starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.6, sizeAttenuation: true });
+const stars = new THREE.Points(starGeo, starMat);
+scene.add(stars);
+
+// ── TERRAIN MODE ──────────────────────────────────────────────
+const terrainGroup = new THREE.Group();
+scene.add(terrainGroup);
+
+// Ground
+const groundGeo = new THREE.PlaneGeometry(400, 400, 60, 60);
+// Add subtle height variation
+const pos = groundGeo.attributes.position;
+for (let i = 0; i < pos.count; i++) {
+  const x = pos.getX(i), z = pos.getY(i);
+  const d = Math.sqrt(x*x + z*z);
+  pos.setZ(i, (Math.sin(x*0.05)*Math.cos(z*0.05)*2) + (Math.random()-0.5)*0.8);
+}
+pos.needsUpdate = true;
+groundGeo.computeVertexNormals();
+groundGeo.rotateX(-Math.PI/2);
+const groundMat = new THREE.MeshLambertMaterial({ color: 0x6b1a1a });
+const ground = new THREE.Mesh(groundGeo, groundMat);
+ground.receiveShadow = true;
+terrainGroup.add(ground);
+
+// Grid lines
+const gridHelper = new THREE.GridHelper(400, 40, 0x3d0a0a, 0x3d0a0a);
+gridHelper.position.y = 0.05;
+terrainGroup.add(gridHelper);
+
+// ── GLOBE MODE ────────────────────────────────────────────────
+const globeGroup = new THREE.Group();
+globeGroup.visible = false;
+scene.add(globeGroup);
+
+const planetGeo = new THREE.SphereGeometry(50, 64, 64);
+const planetMat = new THREE.MeshPhongMaterial({ color: 0x8b2222, shininess: 20, specular: 0x330000 });
+const planet = new THREE.Mesh(planetGeo, planetMat);
+globeGroup.add(planet);
+
+// Atmosphere glow
+const atmGeo = new THREE.SphereGeometry(52, 32, 32);
+const atmMat = new THREE.MeshBasicMaterial({ color: 0xff3300, transparent: true, opacity: 0.05, side: THREE.BackSide });
+const atmosphere = new THREE.Mesh(atmGeo, atmMat);
+globeGroup.add(atmosphere);
+
+// ── WORKPLACE MESHES ─────────────────────────────────────────
+const workplaceMeshes = new Map(); // id → mesh
+const workerMeshes = new Map();    // id → { mesh, targetPos, currentPos }
+
+function placeWorkplacesTerrain() {
+  workplaceMeshes.forEach(m => { terrainGroup.remove(m.terrain); globeGroup.remove(m.globe); });
+  workplaceMeshes.clear();
+
+  workplaces.forEach((wp, i) => {
+    const angle = (i / workplaces.length) * Math.PI * 2;
+    const r = 25 + (i % 3) * 15;
+    const x = Math.cos(angle) * r;
+    const z = Math.sin(angle) * r;
+    const h = Math.max(2, wp.completedShifts * 0.35 + 2);
+    const w = 4 + (i % 3) * 1.5;
+
+    // Terrain building
+    const geo = new THREE.BoxGeometry(w, h, w);
+    const mat = new THREE.MeshPhongMaterial({
+      color: 0x5a1111, emissive: 0x1a0000, emissiveIntensity: 0.3,
+      shininess: 40
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(x, h/2, z);
+    mesh.castShadow = true;
+    mesh.userData = { wpId: wp.id };
+
+    // Antenna
+    const antGeo = new THREE.CylinderGeometry(0.08, 0.08, 3, 4);
+    const antMat = new THREE.MeshBasicMaterial({ color: 0xff4400 });
+    const ant = new THREE.Mesh(antGeo, antMat);
+    ant.position.set(0, h/2 + 1.5, 0);
+    mesh.add(ant);
+
+    // Beacon glow
+    const glowGeo = new THREE.SphereGeometry(0.3, 8, 8);
+    const glowMat = new THREE.MeshBasicMaterial({ color: 0xff6600 });
+    const glow = new THREE.Mesh(glowGeo, glowMat);
+    glow.position.set(0, h/2 + 3.1, 0);
+    mesh.add(glow);
+    mesh.userData.glow = glow;
+    mesh.userData.glowMat = glowMat;
+
+    terrainGroup.add(mesh);
+
+    // Globe pin
+    const phi = (i / workplaces.length) * Math.PI;
+    const theta = (i / workplaces.length) * Math.PI * 2 * 1.4;
+    const pr = 50;
+    const px = pr * Math.sin(phi) * Math.cos(theta);
+    const py = pr * Math.cos(phi);
+    const pz = pr * Math.sin(phi) * Math.sin(theta);
+
+    const pinGeo = new THREE.CylinderGeometry(0.35, 0.1, 2.5, 6);
+    const pinMat = new THREE.MeshPhongMaterial({ color: 0xcc3300, emissive: 0x440000 });
+    const pin = new THREE.Mesh(pinGeo, pinMat);
+    const normal = new THREE.Vector3(px, py, pz).normalize();
+    pin.position.copy(normal.clone().multiplyScalar(51.2));
+    pin.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0), normal);
+    pin.userData = { wpId: wp.id };
+    globeGroup.add(pin);
+
+    workplaceMeshes.set(wp.id, {
+      terrain: mesh,
+      globe: pin,
+      terrainPos: new THREE.Vector3(x, h/2, z),
+      globeNormal: normal.clone()
+    });
+  });
+}
+
+function placeWorkersTerrain() {
+  workerMeshes.forEach(m => { terrainGroup.remove(m.terrainMesh); globeGroup.remove(m.globeMesh); });
+  workerMeshes.clear();
+
+  const colorMap = { idle: 0x4b5563, travelling: 0xfbbf24, working: 0xffffff };
+
+  workers.forEach((wk, i) => {
+    const angle = rng() * Math.PI * 2;
+    const r = rng() * 15 + 3;
+    const startX = Math.cos(angle) * r;
+    const startZ = Math.sin(angle) * r;
+
+    const geo = new THREE.SphereGeometry(0.55, 10, 10);
+    const mat = new THREE.MeshPhongMaterial({
+      color: colorMap[wk.status] || 0x4b5563,
+      emissive: colorMap[wk.status] || 0x000000,
+      emissiveIntensity: wk.status === 'working' ? 0.5 : 0.1,
+      shininess: 80
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(startX, 0.6, startZ);
+    mesh.userData = { wkId: wk.id };
+    terrainGroup.add(mesh);
+
+    // Globe worker
+    const gmesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.4, 8, 8),
+      new THREE.MeshPhongMaterial({ color: colorMap[wk.status] || 0x4b5563 })
+    );
+    const gphi = rng() * Math.PI;
+    const gtheta = rng() * Math.PI * 2;
+    const r2 = 51.5;
+    gmesh.position.set(r2*Math.sin(gphi)*Math.cos(gtheta), r2*Math.cos(gphi), r2*Math.sin(gphi)*Math.sin(gtheta));
+    gmesh.userData = { wkId: wk.id };
+    globeGroup.add(gmesh);
+
+    workerMeshes.set(wk.id, {
+      terrainMesh: mesh, globeMesh: gmesh,
+      mat, terrainTarget: new THREE.Vector3(startX, 0.6, startZ),
+      traveling: false, progress: 0
+    });
+  });
+}
+
+placeWorkplacesTerrain();
+placeWorkersTerrain();
+
+// ═══════════════════════════════════════════════════════════════
+// ANIMATION & TRAVELLING
+// ═══════════════════════════════════════════════════════════════
+const traveling = []; // { workerData, from, to, progress, speed }
+
+function animateWorkerTo(wkId, wpId) {
+  const wm = workerMeshes.get(wkId);
+  const wpData = workplaceMeshes.get(wpId);
+  if (!wm || !wpData) return;
+  const targetPos = wpData.terrainPos.clone();
+  targetPos.y = 0.6;
+  const offset = new THREE.Vector3((rng()-0.5)*3, 0, (rng()-0.5)*3);
+  targetPos.add(offset);
+  traveling.push({ wkId, from: wm.terrainMesh.position.clone(), to: targetPos, progress: 0, speed: 0.4 + rng()*0.3 });
+  // Color → yellow (travelling)
+  wm.mat.color.setHex(0xfbbf24);
+  wm.mat.emissive.setHex(0x7a5c00);
+  wm.mat.emissiveIntensity = 0.4;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// UI UPDATES
+// ═══════════════════════════════════════════════════════════════
+function updateLeaderboards() {
+  const topWp = [...workplaces].sort((a,b)=>b.completedShifts-a.completedShifts).slice(0,3);
+  const topWk = [...workers].sort((a,b)=>b.completedShifts-a.completedShifts).slice(0,3);
+  const maxWp = topWp[0]?.completedShifts || 1;
+  const maxWk = topWk[0]?.completedShifts || 1;
+  const ranks = ['gold','silver','bronze'];
+
+  document.getElementById('lb-workplaces').innerHTML = topWp.map((w,i)=>`
+    <div class="lb-item">
+      <span class="lb-rank ${ranks[i]}">${['①','②','③'][i]}</span>
+      <span class="lb-name">${w.name}</span>
+      <span class="lb-count">${w.completedShifts}</span>
+    </div>
+    <div class="lb-bar"><div class="lb-bar-fill" style="width:${(w.completedShifts/maxWp)*100}%"></div></div>
+  `).join('');
+
+  document.getElementById('lb-workers').innerHTML = topWk.map((w,i)=>`
+    <div class="lb-item">
+      <span class="lb-rank ${ranks[i]}">${['①','②','③'][i]}</span>
+      <span class="lb-name">${w.name}</span>
+      <span class="lb-count">${w.completedShifts}</span>
+    </div>
+    <div class="lb-bar"><div class="lb-bar-fill" style="width:${(w.completedShifts/maxWk)*100}%"></div></div>
+  `).join('');
+}
+
+function updateStats() {
+  const done = shifts.filter(s=>s.completed).length;
+  const open = shifts.filter(s=>!s.workerId && !s.cancelledAt).length;
+  document.getElementById('stat-done').textContent = done;
+  document.getElementById('stat-open').textContent = open;
+}
+
+function addFeedEntry(msg) {
+  const log = document.getElementById('feed-log');
+  const d = document.createElement('div');
+  d.className = 'feed-entry';
+  const t = new Date().toLocaleTimeString('en-US',{hour12:false});
+  d.innerHTML = `<span class="feed-time">${t}</span><span class="feed-msg">${msg}</span>`;
+  log.prepend(d);
+  while (log.children.length > 40) log.removeChild(log.lastChild);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SIMULATION TICK
+// ═══════════════════════════════════════════════════════════════
+function tick() {
+  currentShift++;
+  sol = Math.ceil(currentShift / 3);
+  document.getElementById('shift-num').textContent = currentShift;
+  document.getElementById('sol-num').textContent = String(sol).padStart(3,'0');
+
+  // Pick a random unprocessed open shift
+  const openShifts = shifts.filter(s => !s.workerId && !s.cancelledAt);
+  if (openShifts.length === 0) {
+    addFeedEntry(`<span class="highlight">No open shifts remaining.</span> Simulation complete.`);
+    stopAuto();
+    return;
+  }
+
+  const shift = openShifts[Math.floor(rng() * openShifts.length)];
+  const worker = workers[Math.floor(rng() * workers.length)];
+  const wp = workplaces.find(w => w.id === shift.workplaceId);
+
+  // Assign
+  shift.workerId = worker.id;
+  shift.completed = true;
+  worker.status = 'travelling';
+  wp.completedShifts++;
+  worker.completedShifts++;
+
+  // Animate
+  animateWorkerTo(worker.id, wp.id);
+
+  // Glow workplace
+  const wpMesh = workplaceMeshes.get(wp.id);
+  if (wpMesh?.terrain?.userData?.glowMat) {
+    wpMesh.terrain.userData.glowMat.color.setHex(0xff6600);
+    setTimeout(() => { if (wpMesh.terrain?.userData?.glowMat) wpMesh.terrain.userData.glowMat.color.setHex(0xff4400); }, 800);
+  }
+
+  // Height update in terrain
+  if (wpMesh?.terrain) {
+    const h = Math.max(2, wp.completedShifts * 0.35 + 2);
+    wpMesh.terrain.scale.y = h / (wpMesh.terrain.geometry.parameters.height || 1);
+    wpMesh.terrain.position.y = h / 2;
+    wpMesh.terrainPos.y = h / 2;
+  }
+
+  // Feed
+  addFeedEntry(`<span class="highlight">${worker.name}</span> → <span class="workplace">${wp.name}</span> · shift #${shift.id}`);
+
+  // Update UIs
+  updateLeaderboards();
+  updateStats();
+  rebuildWorkplaceHeights();
+}
+
+function rebuildWorkplaceHeights() {
+  workplaces.forEach(wp => {
+    const data = workplaceMeshes.get(wp.id);
+    if (!data?.terrain) return;
+    const h = Math.max(2, wp.completedShifts * 0.35 + 2);
+    data.terrain.scale.set(1, h / (data.terrain.geometry.parameters.height), 1);
+    data.terrain.position.y = h / 2;
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MODE SWITCH
+// ═══════════════════════════════════════════════════════════════
+function setMode(m) {
+  mode = m;
+  terrainGroup.visible = m === 'terrain';
+  globeGroup.visible = m === 'globe';
+  document.getElementById('mode-badge').textContent = m.toUpperCase() + ' MODE';
+  document.getElementById('btn-terrain').classList.toggle('active', m === 'terrain');
+  document.getElementById('btn-globe').classList.toggle('active', m === 'globe');
+
+  if (m === 'globe') {
+    camera.position.set(0, 0, 120);
+    camera.lookAt(0, 0, 0);
+    scene.fog = null;
+  } else {
+    camera.position.set(0, 45, 90);
+    camera.lookAt(0, 0, 0);
+    scene.fog = new THREE.FogExp2(0x1a0500, 0.008);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CONTROLS
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('btn-next').onclick = tick;
+document.getElementById('btn-terrain').onclick = () => setMode('terrain');
+document.getElementById('btn-globe').onclick = () => setMode('globe');
+
+function stopAuto() {
+  autoRun = false;
+  clearInterval(autoInterval);
+  document.getElementById('btn-auto').classList.remove('active');
+  document.getElementById('btn-auto').textContent = '⟳ AUTO RUN';
+}
+
+document.getElementById('btn-auto').onclick = () => {
+  autoRun = !autoRun;
+  if (autoRun) {
+    document.getElementById('btn-auto').classList.add('active');
+    document.getElementById('btn-auto').textContent = '■ STOP';
+    autoInterval = setInterval(tick, 1400);
+  } else stopAuto();
+};
+
+// ═══════════════════════════════════════════════════════════════
+// RAYCASTING — click & hover
+// ═══════════════════════════════════════════════════════════════
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+const tooltip = document.getElementById('tooltip');
+
+canvas.addEventListener('mousemove', e => {
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+
+  const wkMeshes = [...workerMeshes.values()].map(v => mode === 'terrain' ? v.terrainMesh : v.globeMesh);
+  const hits = raycaster.intersectObjects(wkMeshes);
+  if (hits.length > 0) {
+    const wkId = hits[0].object.userData.wkId;
+    const wk = workers.find(w => w.id === wkId);
+    if (wk) {
+      tooltip.className = 'visible';
+      tooltip.style.left = (e.clientX + 14) + 'px';
+      tooltip.style.top = (e.clientY - 10) + 'px';
+      document.getElementById('tip-name').textContent = wk.name;
+      document.getElementById('tip-stat').textContent = `STATUS: ${wk.status.toUpperCase()}  ·  SHIFTS: ${wk.completedShifts}`;
+    }
+  } else {
+    tooltip.className = '';
+  }
+});
+
+function closePopup() { document.getElementById('wp-popup').className = ''; }
+
+canvas.addEventListener('click', e => {
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+  raycaster.setFromCamera(mouse, camera);
+
+  const wpMeshList = [...workplaceMeshes.values()].map(v => mode === 'terrain' ? v.terrain : v.globe);
+  const hits = raycaster.intersectObjects(wpMeshList, true);
+  if (hits.length > 0) {
+    let obj = hits[0].object;
+    while (obj && !obj.userData.wpId) obj = obj.parent;
+    if (obj?.userData.wpId) {
+      const wp = workplaces.find(w => w.id === obj.userData.wpId);
+      if (wp) {
+        const active = workers.filter(wk => wk.status === 'working' || wk.status === 'travelling').length;
+        const open = shifts.filter(s => s.workplaceId === wp.id && !s.workerId && !s.cancelledAt).length;
+        document.getElementById('wp-name').textContent = wp.name;
+        document.getElementById('wp-done').textContent = wp.completedShifts;
+        document.getElementById('wp-active').textContent = active;
+        document.getElementById('wp-open').textContent = open;
+        document.getElementById('wp-popup').className = 'visible';
+      }
+    }
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════
+// ORBIT CONTROLS (manual)
+// ═══════════════════════════════════════════════════════════════
+let isDragging = false, prevMouse = {x:0, y:0};
+let camTheta = Math.PI/4, camPhi = 0.5, camR = 100;
+
+canvas.addEventListener('mousedown', e => { isDragging = true; prevMouse = {x: e.clientX, y: e.clientY}; });
+canvas.addEventListener('mouseup', () => isDragging = false);
+canvas.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  const dx = e.clientX - prevMouse.x;
+  const dy = e.clientY - prevMouse.y;
+  camTheta -= dx * 0.008;
+  camPhi = Math.max(0.1, Math.min(1.4, camPhi + dy * 0.008));
+  prevMouse = {x: e.clientX, y: e.clientY};
+});
+canvas.addEventListener('wheel', e => {
+  camR = Math.max(30, Math.min(250, camR + e.deltaY * 0.12));
+});
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER LOOP
+// ═══════════════════════════════════════════════════════════════
+let glowPhase = 0;
+
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+resize();
+window.addEventListener('resize', resize);
+
+function animate() {
+  requestAnimationFrame(animate);
+  glowPhase += 0.04;
+
+  // Camera orbit
+  if (mode === 'terrain') {
+    const cx = camR * Math.sin(camPhi) * Math.sin(camTheta);
+    const cy = camR * Math.cos(camPhi);
+    const cz = camR * Math.sin(camPhi) * Math.cos(camTheta);
+    camera.position.lerp(new THREE.Vector3(cx, cy, cz), 0.06);
+    camera.lookAt(0, 5, 0);
+  } else {
+    const cx = camR * Math.sin(camPhi) * Math.sin(camTheta);
+    const cy = camR * Math.cos(camPhi);
+    const cz = camR * Math.sin(camPhi) * Math.cos(camTheta);
+    camera.position.lerp(new THREE.Vector3(cx, cy, cz), 0.06);
+    camera.lookAt(0, 0, 0);
+    planet.rotation.y += 0.0015;
+  }
+
+  // Stars drift
+  stars.rotation.y += 0.00005;
+
+  // Traveling workers
+  for (let i = traveling.length - 1; i >= 0; i--) {
+    const t = traveling[i];
+    t.progress = Math.min(1, t.progress + 0.008);
+    const wm = workerMeshes.get(t.wkId);
+    if (wm) {
+      wm.terrainMesh.position.lerpVectors(t.from, t.to, t.progress);
+    }
+    if (t.progress >= 1) {
+      traveling.splice(i, 1);
+      const wk = workers.find(w => w.id === t.wkId);
+      if (wk) {
+        wk.status = 'working';
+        if (wm) {
+          wm.mat.color.setHex(0xffffff);
+          wm.mat.emissive.setHex(0x666666);
+          wm.mat.emissiveIntensity = 0.5;
+        }
+      }
+    }
+  }
+
+  // Workplace beacon pulse
+  workplaceMeshes.forEach((data) => {
+    if (data.terrain?.userData?.glow) {
+      const pulse = 0.7 + Math.sin(glowPhase) * 0.3;
+      data.terrain.userData.glow.scale.setScalar(pulse);
+    }
+  });
+
+  // Atmosphere pulse
+  atmMat.opacity = 0.04 + Math.sin(glowPhase * 0.5) * 0.02;
+
+  renderer.render(scene, camera);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+updateLeaderboards();
+updateStats();
+setMode('terrain');
+addFeedEntry('System online. <span class="highlight">15 workers</span> · <span class="workplace">8 sites</span> · 120 shifts loaded.');
+animate();
+</script>
+</body>
+</html>
