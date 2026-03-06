@@ -2,6 +2,8 @@
 
 A self-contained 3D Mars workforce visualizer. No install, no server — just open the HTML file in any modern browser.
 
+[Live url](https://red-planet-staffing.vercel.app/)
+
 ## Running it
 
 ```
